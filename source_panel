@@ -1,0 +1,218 @@
+%% 1.Geometry defination   (working fine )
+
+clear;
+clc;
+angle_of_attack=0;                                                                       
+u_inf=1;
+
+%%
+% Geometry import
+[x, z] = csvimport('naca0012.csv', 'columns', {'x', 'z'});                    % Importing co-ordinates of airfoil from CSV file
+ x = flipud(x); 
+ z = flipud(z);                                                               % Flip the Y-data array
+node=length(x);                                                               % no of node points
+no_panel=node-1;                                                              % no of panals
+
+xc=zeros(no_panel,1);
+zc=zeros(no_panel,1);
+dx=zeros(no_panel,1);
+dz=zeros(no_panel,1);
+l=zeros(no_panel,1);
+alpha_d=zeros(no_panel,1);
+% Alpha of panel
+for j = 1:1:no_panel
+    xc(j)   = 0.5*(x(j)+x(j+1));
+    zc(j)   = 0.5*(z(j)+z(j+1));                                                 % z-value of control point
+    dx (j)     = x(j+1)-x(j);                                                    % Change in x between boundary points
+    dz (j)     = z(j+1)-z(j);                                                    % Change in z between boundary points
+    l(j)    = (dx(j)^2 + dz(j)^2)^0.5;                                           % Length of the panel
+ 	alpha_d(j) = (atan2d(-dz(j),-dx(j)));   
+    alpha_d(j)=-alpha_d(j)+180;
+%      q
+end
+
+delta_d             = alpha_d +90;                                             % Angle from positive X-axis to outward normal vector [deg]
+% Convert angles from [deg] to [rad]
+alpha  = (alpha_d.*(pi/180));                                                   % Convert from [deg] to [rad]
+delta      =   (delta_d.*(pi/180));                                
+
+figure(1);                                                              
+    cla; hold on; grid off;                                                 % Get ready for plotting
+    set(gcf,'Color','White');                                               % Set color to white
+    set(gca,'FontSize',12);                                                 % Set font size
+    fill(x,z,'k');                                                        
+    for j = 1:1:no_panel                                                     
+        x1(1) = xc(j);                                                      
+        x1(2) = xc(j) + l(j)*cosd(delta_d(j));                             
+        z1(1) = zc(j);                                                      
+        z1(2) = zc(j) + l(j)*sind(delta_d(j));                             
+        plot(x1,z1,'r-','LineWidth',2);                                     % Plot panel normal vector
+   if (j == 3)                                                             
+        p1 = plot(x1,z1,'b-','LineWidth',2);                                  
+    elseif (j == 2)                                                         
+        p2 = plot(x1,z1,'g-','LineWidth',2);                                  
+    else                                                                    % For every other panel
+        plot(x1,z1,'r-','LineWidth',2);                                     % Plot panel normal vector
+    end
+    end
+    xlabel('X Units');   ylabel('Z Units');                                                     
+	xlim('auto');        ylim('auto');                                      
+    axis equal;          zoom reset;                                                            
+    
+    %% 2. Influence coefficient
+
+%  panel normal and tagents 
+n1=zeros(no_panel,1);
+n2=zeros(no_panel,1);
+t1=zeros(no_panel,1);
+t2=zeros(no_panel,1);
+for j=1:1:no_panel
+    n1(j)=sin(alpha(j)) ;                             %x direction of normal
+    n2(j)=cos(alpha(j)) ;                             % y direction of normal
+    t1(j)=cos(alpha(j)) ;                            % x direction of tagent 
+    t2(j)=-sin(alpha(j)) ;                            % y direction of tagent 
+end
+
+% Global co-ordinates to panel co-ordinates Point P (i - point , j - panel)
+xj_p=zeros(no_panel,no_panel);
+zj_p=zeros(no_panel,no_panel);
+
+for i=1:1:no_panel
+    for j=1:1:no_panel
+   xj_p(i,j)=cos(alpha(j)).*(xc(i)-x(j))-sin(alpha(j)).*(zc(i)-z(j));        % r1Xp
+   zj_p(i,j)=sin(alpha(j)).*(xc(i)-x(j))+cos(alpha(j)).*(zc(i)-z(j));        % r1Zp
+    end
+end
+
+
+% velocity in panel co-ordinates    unit strength 
+up=zeros(no_panel,no_panel);
+wp=zeros(no_panel,no_panel);
+
+% for i=1:1:no_panel
+%     for j=1:1:no_panel
+%    up(i,j)= (1/(4*pi))*(log ((xj_p(i,j)-x(j))^2  + zj_p(i,j)^2  )-log( (xj_p(i,j)-x(j+1))^2 + zj_p(i,j)^2 ));    
+%    wp(i,j)=(1/(2*pi))*( atan2( zj_p(i,j) , (xj_p(i,j)-x(j+1)) )- atan2 (   zj_p(i,j),   (xj_p(i,j)-x(j))    ));
+%     end
+% end
+
+for i=1:1:no_panel
+    for j=1:1:no_panel
+   up(i,j)= (1/(4*pi))*(log ((xj_p(i,j))^2  + zj_p(i,j)^2  )-log( (xj_p(i,j)-l(j))^2 + zj_p(i,j)^2 ));    
+   wp(i,j)=(1/(2*pi))*( atan2( zj_p(i,j) , (xj_p(i,j)-l(j) ))- atan2 (   zj_p(i,j),   (xj_p(i,j))    ));
+    end
+end
+
+
+% velocity(due to panel strength) in global co-ordinates 
+ug=zeros(no_panel,no_panel);
+wg=zeros(no_panel,no_panel);
+for i=1:1:no_panel
+    for j=1:1:no_panel
+        ug(i,j)=cos(alpha(j))*up(i,j)+sin(alpha(j))*wp(i,j); 
+        wg(i,j)=-sin(alpha(j))*up(i,j)+cos(alpha(j))*wp(i,j);
+    end
+end
+
+
+% infulance co-efficent 
+a=zeros(no_panel,no_panel);
+for i=1:1:no_panel
+    for j=1:1:no_panel
+        if i==j
+            a(i,j)=0.5;
+        else
+        a(i,j)=- (sin( alpha(j) - alpha(i) ))*up(i,j)+ (cos( alpha(j) - alpha(i) ))*wp(i,j);
+        end
+    end
+end
+
+
+%% 3. RHS calculations  correct 
+rhs=zeros(no_panel,1);
+for j=1:1:no_panel
+rhs(j)=-u_inf.*sin(alpha(j));  
+% rhs(j)=-u_inf.*cos(delta(j))*2*pi; 
+end
+
+
+
+%% 4. solving equation
+sigma=a\rhs;
+
+
+%% COMPUTE PANEL VELOCITIES AND PRESSURE COEFFICIENTS
+
+% velocity in panel system with full strength 
+up1=zeros(no_panel,no_panel);
+wp1=zeros(no_panel,no_panel);
+
+
+for i=1:1:no_panel
+    for j=1:1:no_panel
+   up1(i,j)= (sigma(j)/(4*pi))*(log ((xj_p(i,j))^2  + zj_p(i,j)^2  )-log( (xj_p(i,j)-l(j))^2 + zj_p(i,j)^2 ));    
+   wp1(i,j)=(sigma(j)/(2*pi))*( atan2( zj_p(i,j) , (xj_p(i,j)-l(j) ))- atan2 (   zj_p(i,j),   (xj_p(i,j))    ));
+    end
+end
+
+
+
+
+
+
+
+
+% Velocity in global system with full strength 
+
+
+ug1=zeros(no_panel,no_panel);
+wg1=zeros(no_panel,no_panel);
+for i=1:1:no_panel
+    for j=1:1:no_panel
+        ug1(i,j)=cos(alpha(j))*up1(i,j)+sin(alpha(j))*wp1(i,j); 
+        wg1(i,j)=-sin(alpha(j))*up1(i,j)+cos(alpha(j))*wp1(i,j);
+    end
+end
+
+
+
+
+
+
+
+
+
+
+% velocity calculation in global co -ordinates 
+var1=zeros(no_panel,1);
+var2=zeros(no_panel,1);
+for i=1:1:no_panel
+var1(i)= sum(ug1(i,:));                         % sum of velocity (global) in x direction at particular point due to all the panels
+var2(i)=sum(wg1(i,:));                          % sum of velocity (global)in y directionat particular point due to alll the panels  
+end
+var3=var1+u_inf;                               % sum of velocity due all panel and free stream velocity 
+var5=zeros(no_panel,1);                         
+var7=zeros(no_panel,1);
+Vt=zeros(no_panel,1);
+for i=1:1:no_panel
+  var5(i)  =var3(i)*t1(i);                     % tagent component of x global velocity on the panel 
+   var7(i) =var2(i)*t2(i);                     % tagent component of y global velocity on the panel 
+   Vt(i) =var5(i)+var7(i);                     % total tagent velocity 
+end
+
+
+cp=zeros(no_panel,1);                         
+t=zeros(no_panel,1);
+for i=1:1:no_panel
+cp(i) = 1-(Vt(i)/u_inf)^2;                                                      % Compute pressure coefficient
+t(i)=(Vt(i)/u_inf)^2;
+
+end
+
+%% 5. Plotting Cp value 
+
+figure(6)
+ plot(xc,cp,'-ok',x,z,'k')
+xlabel(' x '),ylabel(' (Vt/u_inf)^2 ')
+
+ 
